@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { isAuthenticatedRequest } from '@/lib/auth'
+import { isAuthenticatedRequest } from '@/lib/auth-edge'
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Protect all /dashboard routes
   if (pathname.startsWith('/dashboard')) {
-    if (!isAuthenticatedRequest(request)) {
+    if (!(await isAuthenticatedRequest(request))) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('from', pathname)
       return NextResponse.redirect(loginUrl)
