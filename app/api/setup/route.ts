@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createTables } from '@/lib/db'
+import { createTables, runMigrations } from '@/lib/db'
 
 // One-time setup endpoint — creates the database tables.
 // Protected by admin password to prevent unauthorized calls.
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
 
   try {
     await createTables()
+    await runMigrations()
     return NextResponse.json({ success: true, message: 'Tables created (or already exist).' })
   } catch (err) {
     console.error('Setup error:', err)

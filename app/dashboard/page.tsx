@@ -42,8 +42,19 @@ export default function DevicesPage() {
     setActionId(null)
   }
 
+  async function togglePro(device: Device) {
+    setActionId(device.id)
+    await fetch(`/api/admin/devices/${device.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_pro: !device.is_pro }),
+    })
+    await load()
+    setActionId(null)
+  }
+
   async function deleteDevice(id: string) {
-    if (!confirm('Delete this device? They will need to re-register with an invite code.')) return
+    if (!confirm('Delete this device? They will need to re-register on next launch.')) return
     setActionId(id)
     await fetch(`/api/admin/devices/${id}`, { method: 'DELETE' })
     await load()
@@ -81,7 +92,7 @@ export default function DevicesPage() {
 
       {devices.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
-          No devices registered yet. Share an invite code to get started.
+          No devices registered yet.
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-800">
@@ -90,9 +101,10 @@ export default function DevicesPage() {
               <tr>
                 <th className="px-4 py-3 text-left">Tester</th>
                 <th className="px-4 py-3 text-left">Device ID</th>
-                <th className="px-4 py-3 text-left">Code Used</th>
+                <th className="px-4 py-3 text-left">Pro Key Used</th>
                 <th className="px-4 py-3 text-left">Last Seen</th>
-                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Access</th>
+                <th className="px-4 py-3 text-left">Pro</th>
                 <th className="px-4 py-3 text-left">Actions</th>
               </tr>
             </thead>
@@ -139,8 +151,8 @@ export default function DevicesPage() {
                   <td className="px-4 py-3 font-mono text-gray-400 text-xs">
                     {device.device_id.substring(0, 12)}…
                   </td>
-                  <td className="px-4 py-3 font-mono text-gray-400">
-                    {device.invite_code}
+                  <td className="px-4 py-3 font-mono text-gray-400 text-xs">
+                    {device.invite_code ?? <span className="text-gray-600 italic">—</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-400">{timeAgo(device.last_seen_at)}</td>
                   <td className="px-4 py-3">
@@ -155,6 +167,17 @@ export default function DevicesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                        device.is_pro
+                          ? 'bg-blue-900 text-blue-300'
+                          : 'bg-gray-800 text-gray-500'
+                      }`}
+                    >
+                      {device.is_pro ? 'Pro' : 'Free'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex gap-3 items-center">
                       <button
                         onClick={() => toggleAccess(device)}
@@ -166,6 +189,17 @@ export default function DevicesPage() {
                         }`}
                       >
                         {device.is_allowed ? 'Revoke' : 'Restore'}
+                      </button>
+                      <button
+                        onClick={() => togglePro(device)}
+                        disabled={actionId === device.id}
+                        className={`text-xs font-medium transition-colors disabled:opacity-50 ${
+                          device.is_pro
+                            ? 'text-gray-400 hover:text-gray-300'
+                            : 'text-blue-400 hover:text-blue-300'
+                        }`}
+                      >
+                        {device.is_pro ? 'Revoke Pro' : 'Grant Pro'}
                       </button>
                       <button
                         onClick={() => startEdit(device)}

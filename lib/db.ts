@@ -24,12 +24,13 @@ async function query<T extends object>(text: string, params?: unknown[]): Promis
 export interface Device {
   id: string
   device_id: string
-  invite_code: string
+  invite_code: string | null
   display_name: string | null
   notes: string | null
   registered_at: string
   last_seen_at: string
   is_allowed: boolean
+  is_pro: boolean
 }
 
 export interface InviteCode {
@@ -54,13 +55,30 @@ export async function createTables() {
     CREATE TABLE IF NOT EXISTS devices (
       id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       device_id     VARCHAR(64) UNIQUE NOT NULL,
-      invite_code   VARCHAR(12) NOT NULL REFERENCES invite_codes(code) ON DELETE RESTRICT,
+      invite_code   VARCHAR(12),
       display_name  VARCHAR(100),
       notes         TEXT,
       registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      is_allowed    BOOLEAN NOT NULL DEFAULT TRUE
+      is_allowed    BOOLEAN NOT NULL DEFAULT TRUE,
+      is_pro        BOOLEAN NOT NULL DEFAULT FALSE
     )
+  `)
+}
+
+/** Safe to run on every deploy — idempotent migrations. */
+export async function runMigrations() {
+  // Add is_pro column if it doesn't exist (new Pro feature)
+  await query(`
+    ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_pro BOOLEAN NOT NULL DEFAULT FALSE
+  `)
+  // Make invite_code nullable (devices now auto-register without a code)
+  await query(`
+    ALTER TABLE devices ALTER COLUMN invite_code DROP NOT NULL
+  `)
+  // Drop old FK constraint if it exists (invite_code is now optional)
+  await query(`
+    ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_invite_code_fkey
   `)
 }
 
@@ -100,27 +118,37 @@ export async function getInviteCode(code: string): Promise<InviteCode | null> {
 
 export async function getAllDevices(): Promise<Device[]> {
   return query<Device>(
-    'SELECT id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed FROM devices ORDER BY registered_at DESC'
+    'SELECT id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed, is_pro FROM devices ORDER BY registered_at DESC'
   )
 }
 
 export async function getDeviceByDeviceId(deviceId: string): Promise<Device | null> {
   const rows = await query<Device>(
-    'SELECT id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed FROM devices WHERE device_id = $1',
+    'SELECT id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed, is_pro FROM devices WHERE device_id = $1',
     [deviceId]
   )
   return rows[0] ?? null
 }
 
-export async function registerDevice(deviceId: string, inviteCode: string): Promise<Device> {
+/** Auto-register a device (no invite code required). */
+export async function registerDevice(deviceId: string): Promise<Device> {
   const rows = await query<Device>(
-    `INSERT INTO devices (device_id, invite_code)
-     VALUES ($1, $2)
+    `INSERT INTO devices (device_id)
+     VALUES ($1)
      ON CONFLICT (device_id) DO UPDATE SET last_seen_at = NOW()
-     RETURNING id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed`,
-    [deviceId, inviteCode]
+     RETURNING id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed, is_pro`,
+    [deviceId]
   )
   return rows[0]
+}
+
+/** Activate pro license for a device using a valid invite code as pro key. */
+export async function activateProLicense(deviceId: string, proKey: string): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    `UPDATE devices SET is_pro = TRUE, invite_code = $2 WHERE device_id = $1 RETURNING id`,
+    [deviceId, proKey]
+  )
+  return rows.length > 0
 }
 
 export async function updateDeviceLastSeen(deviceId: string): Promise<void> {
@@ -129,17 +157,18 @@ export async function updateDeviceLastSeen(deviceId: string): Promise<void> {
 
 export async function updateDevice(
   id: string,
-  patch: { is_allowed?: boolean; display_name?: string | null; notes?: string | null }
+  patch: { is_allowed?: boolean; display_name?: string | null; notes?: string | null; is_pro?: boolean }
 ): Promise<Device | null> {
   const rows = await query<Device>(
     `UPDATE devices
      SET
        is_allowed   = COALESCE($2, is_allowed),
        display_name = COALESCE($3, display_name),
-       notes        = COALESCE($4, notes)
+       notes        = COALESCE($4, notes),
+       is_pro       = COALESCE($5, is_pro)
      WHERE id = $1
-     RETURNING id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed`,
-    [id, patch.is_allowed ?? null, patch.display_name ?? null, patch.notes ?? null]
+     RETURNING id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed, is_pro`,
+    [id, patch.is_allowed ?? null, patch.display_name ?? null, patch.notes ?? null, patch.is_pro ?? null]
   )
   return rows[0] ?? null
 }

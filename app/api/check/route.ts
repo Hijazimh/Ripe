@@ -12,11 +12,11 @@ export async function GET(request: NextRequest) {
   const device = await getDeviceByDeviceId(cleanDeviceId)
 
   if (!device) {
-    return NextResponse.json({ allowed: false, error: 'NOT_REGISTERED' }, { status: 403 })
+    return NextResponse.json({ allowed: false, isPro: false, error: 'NOT_REGISTERED' }, { status: 403 })
   }
 
   // Update last seen timestamp in the background (don't await)
   updateDeviceLastSeen(cleanDeviceId).catch(() => {})
 
-  return NextResponse.json({ allowed: device.is_allowed })
+  return NextResponse.json({ allowed: device.is_allowed, isPro: device.is_pro })
 }
