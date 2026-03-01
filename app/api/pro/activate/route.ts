@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDeviceByDeviceId, getInviteCode, activateProLicense } from '@/lib/db'
+import { getDeviceByDeviceId, getInviteCode, activateProLicense, registerDevice } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   let body: { deviceId?: string; proKey?: string }
@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
   const cleanDeviceId = deviceId.trim().toLowerCase()
   const cleanKey = proKey.trim().toUpperCase()
 
-  // Device must already be registered
-  const device = await getDeviceByDeviceId(cleanDeviceId)
+  // Auto-register device if not found (handles race with background registration on Android)
+  let device = await getDeviceByDeviceId(cleanDeviceId)
   if (!device) {
-    return NextResponse.json({ success: false, error: 'NOT_REGISTERED' }, { status: 403 })
+    device = await registerDevice(cleanDeviceId)
   }
 
   // Validate the pro key against invite_codes table
