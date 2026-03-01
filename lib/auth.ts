@@ -1,5 +1,4 @@
 import { createHmac } from 'crypto'
-import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
 
 const SESSION_COOKIE = 'bbl_admin_session'
@@ -28,6 +27,7 @@ export function isValidSessionToken(token: string): boolean {
 
 /** Check if the current request has a valid admin session (server component / route handler). */
 export async function isAuthenticated(): Promise<boolean> {
+  const { cookies } = await import('next/headers')
   const cookieStore = await cookies()
   const token = cookieStore.get(SESSION_COOKIE)?.value
   if (!token) return false
