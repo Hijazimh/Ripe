@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
 
 function LoginForm() {
   const router = useRouter()
@@ -35,30 +34,37 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-8 w-full max-w-sm shadow-2xl">
-        <h1 className="text-2xl font-bold text-white mb-2">BBLauncher Admin</h1>
-        <p className="text-gray-400 text-sm mb-6">Enter your admin password to continue.</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-950">
+      <div className="w-full max-w-sm px-4">
+        {/* Logo */}
+        <div className="flex justify-center mb-10">
+          <img src="/ripe-logo.svg" alt="Ripe" className="h-8 w-auto" />
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Password"
-            required
-            autoFocus
-            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
-          >
-            {loading ? 'Checking...' : 'Login'}
-          </button>
-        </form>
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
+          <h1 className="text-lg font-semibold text-white mb-1">Admin Login</h1>
+          <p className="text-gray-500 text-sm mb-7">Enter your password to access the dashboard.</p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+              required
+              autoFocus
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors text-sm"
+            />
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+            <button
+              type="submit"
+              disabled={loading || !password}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+            >
+              {loading ? 'Verifying…' : 'Continue'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   )

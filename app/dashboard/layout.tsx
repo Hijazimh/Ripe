@@ -12,41 +12,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/login')
   }
 
+  const navLinks = [
+    { href: '/dashboard', label: 'Devices' },
+    { href: '/dashboard/codes', label: 'Pro Keys' },
+  ]
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-950">
       {/* Nav */}
-      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-6">
-        <span className="font-bold text-white text-lg mr-4">BBLauncher Admin</span>
-        <Link
-          href="/dashboard"
-          className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
-            pathname === '/dashboard'
-              ? 'bg-blue-600 text-white'
-              : 'text-gray-400 hover:text-white hover:bg-gray-800'
-          }`}
-        >
-          Devices
-        </Link>
-        <Link
-          href="/dashboard/codes"
-          className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
-            pathname === '/dashboard/codes'
-              ? 'bg-blue-600 text-white'
-              : 'text-gray-400 hover:text-white hover:bg-gray-800'
-          }`}
-        >
-          Invite Codes
-        </Link>
-        <button
-          onClick={handleLogout}
-          className="ml-auto text-sm text-gray-500 hover:text-gray-300 transition-colors"
-        >
-          Logout
-        </button>
+      <nav className="border-b border-gray-800/60 bg-gray-950/90 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-6">
+          {/* Logo */}
+          <img src="/ripe-logo.svg" alt="Ripe" className="h-[22px] w-auto opacity-90 mr-2" />
+
+          {/* Nav links */}
+          <div className="flex items-center gap-1">
+            {navLinks.map(link => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  pathname === link.href
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Logout */}
+          <button
+            onClick={handleLogout}
+            className="ml-auto text-sm text-gray-600 hover:text-gray-300 transition-colors"
+          >
+            Logout
+          </button>
+        </div>
       </nav>
 
-      {/* Content */}
-      <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+      <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>
     </div>
   )
 }

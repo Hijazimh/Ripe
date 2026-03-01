@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'BBLauncher Admin',
-  description: 'BBLauncher tester access management',
+  title: 'Ripe Admin',
+  description: 'Ripe Launcher admin dashboard',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
