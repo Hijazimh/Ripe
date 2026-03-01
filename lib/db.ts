@@ -1,6 +1,25 @@
-import { sql } from '@vercel/postgres'
+import { Pool } from 'pg'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ── Connection pool ───────────────────────────────────────────────────────────
+// Uses DATABASE_URL env var (set in Vercel dashboard).
+// SSL required for Supabase.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 3, // keep small for serverless
+})
+
+async function query<T extends object>(text: string, params?: unknown[]): Promise<T[]> {
+  const client = await pool.connect()
+  try {
+    const result = await client.query<T>(text, params)
+    return result.rows
+  } finally {
+    client.release()
+  }
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface Device {
   id: string
@@ -20,18 +39,18 @@ export interface InviteCode {
   is_active: boolean
 }
 
-// ─── Schema setup (called once via /api/setup) ────────────────────────────────
+// ── Schema setup ──────────────────────────────────────────────────────────────
 
 export async function createTables() {
-  await sql`
+  await query(`
     CREATE TABLE IF NOT EXISTS invite_codes (
       id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       code        VARCHAR(12) UNIQUE NOT NULL,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       is_active   BOOLEAN NOT NULL DEFAULT TRUE
     )
-  `
-  await sql`
+  `)
+  await query(`
     CREATE TABLE IF NOT EXISTS devices (
       id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       device_id     VARCHAR(64) UNIQUE NOT NULL,
@@ -42,97 +61,89 @@ export async function createTables() {
       last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       is_allowed    BOOLEAN NOT NULL DEFAULT TRUE
     )
-  `
+  `)
 }
 
-// ─── Invite codes ─────────────────────────────────────────────────────────────
+// ── Invite codes ──────────────────────────────────────────────────────────────
 
 export async function getAllInviteCodes(): Promise<InviteCode[]> {
-  const { rows } = await sql<InviteCode>`
-    SELECT id, code, created_at, is_active
-    FROM invite_codes
-    ORDER BY created_at DESC
-  `
-  return rows
+  return query<InviteCode>(
+    'SELECT id, code, created_at, is_active FROM invite_codes ORDER BY created_at DESC'
+  )
 }
 
 export async function createInviteCode(code: string): Promise<InviteCode> {
-  const { rows } = await sql<InviteCode>`
-    INSERT INTO invite_codes (code)
-    VALUES (${code})
-    RETURNING id, code, created_at, is_active
-  `
+  const rows = await query<InviteCode>(
+    'INSERT INTO invite_codes (code) VALUES ($1) RETURNING id, code, created_at, is_active',
+    [code]
+  )
   return rows[0]
 }
 
 export async function deactivateInviteCode(id: string): Promise<void> {
-  await sql`UPDATE invite_codes SET is_active = FALSE WHERE id = ${id}`
+  await query('UPDATE invite_codes SET is_active = FALSE WHERE id = $1', [id])
 }
 
 export async function deleteInviteCode(id: string): Promise<void> {
-  await sql`DELETE FROM invite_codes WHERE id = ${id}`
+  await query('DELETE FROM invite_codes WHERE id = $1', [id])
 }
 
 export async function getInviteCode(code: string): Promise<InviteCode | null> {
-  const { rows } = await sql<InviteCode>`
-    SELECT id, code, created_at, is_active
-    FROM invite_codes
-    WHERE code = ${code}
-  `
+  const rows = await query<InviteCode>(
+    'SELECT id, code, created_at, is_active FROM invite_codes WHERE code = $1',
+    [code]
+  )
   return rows[0] ?? null
 }
 
-// ─── Devices ──────────────────────────────────────────────────────────────────
+// ── Devices ───────────────────────────────────────────────────────────────────
 
 export async function getAllDevices(): Promise<Device[]> {
-  const { rows } = await sql<Device>`
-    SELECT id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed
-    FROM devices
-    ORDER BY registered_at DESC
-  `
-  return rows
+  return query<Device>(
+    'SELECT id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed FROM devices ORDER BY registered_at DESC'
+  )
 }
 
 export async function getDeviceByDeviceId(deviceId: string): Promise<Device | null> {
-  const { rows } = await sql<Device>`
-    SELECT id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed
-    FROM devices
-    WHERE device_id = ${deviceId}
-  `
+  const rows = await query<Device>(
+    'SELECT id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed FROM devices WHERE device_id = $1',
+    [deviceId]
+  )
   return rows[0] ?? null
 }
 
 export async function registerDevice(deviceId: string, inviteCode: string): Promise<Device> {
-  const { rows } = await sql<Device>`
-    INSERT INTO devices (device_id, invite_code)
-    VALUES (${deviceId}, ${inviteCode})
-    ON CONFLICT (device_id) DO UPDATE SET last_seen_at = NOW()
-    RETURNING id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed
-  `
+  const rows = await query<Device>(
+    `INSERT INTO devices (device_id, invite_code)
+     VALUES ($1, $2)
+     ON CONFLICT (device_id) DO UPDATE SET last_seen_at = NOW()
+     RETURNING id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed`,
+    [deviceId, inviteCode]
+  )
   return rows[0]
 }
 
 export async function updateDeviceLastSeen(deviceId: string): Promise<void> {
-  await sql`UPDATE devices SET last_seen_at = NOW() WHERE device_id = ${deviceId}`
+  await query('UPDATE devices SET last_seen_at = NOW() WHERE device_id = $1', [deviceId])
 }
 
 export async function updateDevice(
   id: string,
-  patch: { is_allowed?: boolean; display_name?: string; notes?: string }
+  patch: { is_allowed?: boolean; display_name?: string | null; notes?: string | null }
 ): Promise<Device | null> {
-  // Build dynamic update — only set fields that were provided
-  const { rows } = await sql<Device>`
-    UPDATE devices
-    SET
-      is_allowed   = COALESCE(${patch.is_allowed ?? null}, is_allowed),
-      display_name = COALESCE(${patch.display_name ?? null}, display_name),
-      notes        = COALESCE(${patch.notes ?? null}, notes)
-    WHERE id = ${id}
-    RETURNING id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed
-  `
+  const rows = await query<Device>(
+    `UPDATE devices
+     SET
+       is_allowed   = COALESCE($2, is_allowed),
+       display_name = COALESCE($3, display_name),
+       notes        = COALESCE($4, notes)
+     WHERE id = $1
+     RETURNING id, device_id, invite_code, display_name, notes, registered_at, last_seen_at, is_allowed`,
+    [id, patch.is_allowed ?? null, patch.display_name ?? null, patch.notes ?? null]
+  )
   return rows[0] ?? null
 }
 
 export async function deleteDevice(id: string): Promise<void> {
-  await sql`DELETE FROM devices WHERE id = ${id}`
+  await query('DELETE FROM devices WHERE id = $1', [id])
 }
